@@ -1,0 +1,253 @@
+---
+output:
+  html_document:
+    df_print: paged
+  author: "Chandrasekhar Gudipati"
+  date: "October 15, 2020"
+  output: html_document
+  title: "PML Week 4"
+---
+# Introduction
+### Hi. This is Chandrasekhar and here is my solution to the pml assignment.
+##### We first load the data, remove those columns that have too many null values and then just find correlations with the data that is left and the final classe variables.
+
+```{r,warning=FALSE,message=FALSE,include=FALSE,echo=FALSE}
+library(corrplot)
+library(ggplot2)
+library(DT)
+library(correlationfunnel)
+library(plotly)
+library(knitr)
+library(caret)
+library(GGally)
+library(e1071)
+library(dplyr)
+library(rattle)
+```
+
+```{r}
+
+dftr <- read.csv("pml-training.csv", stringsAsFactors = F,na.strings = c("","NA","#DIV/0!"))
+dft <- read.csv("pml-testing.csv", stringsAsFactors = F,na.strings = c("","NA","#DIV/0!"))
+
+intr <- createDataPartition(dftr$classe, p = 0.7, list = F)
+dfv <- dftr[-intr,]
+dftr <- dftr[intr,]
+
+bm <- sapply(select(dftr,names(dftr)[grepl("_belt",names(dftr))]),
+                    function(x) sum(is.na(x)))
+
+
+am <- sapply(select(dftr,names(dftr)[grepl("_arm",names(dftr))]),
+                   function(x) sum(is.na(x)))
+
+
+fm <- sapply(select(dftr,
+                              names(dftr)[grepl("_forearm",names(dftr))]),
+                       function(x) sum(is.na(x)))
+
+
+dm <- sapply(select(dftr,
+                               names(dftr)[grepl("_dumbbell",names(dftr))]),
+                        function(x) sum(is.na(x)))
+
+
+c2d <- c(names(bm[bm != 0]), 
+                  names(am[am != 0]),
+                  names(fm[fm != 0]),
+                  names(dm[dm != 0]))
+
+
+dfa <- tbl_df(dftr %>% 
+                      select(-c2d,
+                             -c(X,user_name, raw_timestamp_part_1, 
+                                raw_timestamp_part_2, cvtd_timestamp, 
+                                new_window,num_window)))
+dfa$classe <- as.factor(dfa$classe)
+dfa[,1:52] <- lapply(dfa[,1:52],as.numeric)
+```
+
+```{r,fig.height=10,fig.width=10}
+cc <- cor(select(dfa, -classe))
+diag(cc) <- 0
+cc <- which(abs(cc)>0.8,arr.ind = T)
+cc <- unique(row.names(cc))
+
+corrplot(cor(select(dfa,cc)),
+         type="lower", order="hclust",method = "number")
+
+
+cfd <- dfa %>% binarize(n_bins = 4, thresh_infreq = 0.01)
+```
+
+```{r,fig.align="center",fig.width=8,fig.height=10}
+coa <- cfd %>% correlate(target = classe__A) 
+coa %>% plot_correlation_funnel(interactive = T,limits = c(-0.5,0.5))
+```
+```{r, echo=FALSE, eval=FALSE}
+
+tea <- head(coa %>% mutate(corr = abs(correlation)) %>% 
+  arrange(desc(corr)) %>% select(feature) %>% unique(),20)
+
+```
+```{r,fig.align="center",fig.width=8,fig.height=10}
+cob <- cfd %>% correlate(target = classe__B)
+cob %>% plot_correlation_funnel(interactive = T,limits = c(-0.5,0.5))
+```
+```{r, echo=FALSE, eval=FALSE}
+
+teb <- head(cob %>% mutate(corr = abs(correlation)) %>% 
+  arrange(desc(corr)) %>% select(feature) %>% unique(),20)
+
+
+```
+```{r,fig.align="center",fig.width=8,fig.height=10}
+coc <- cfd %>% correlate(target = classe__C)
+coc %>% plot_correlation_funnel(interactive = T,limits = c(-0.5,0.5))
+```
+```{r, echo=FALSE, eval=FALSE}
+
+tec <- head(coc %>% mutate(corr = abs(correlation)) %>% 
+  arrange(desc(corr)) %>% select(feature) %>% unique(),20)
+
+
+```
+```{r,fig.align="center",fig.width=8,fig.height=10}
+cod <- cfd %>% correlate(target = classe__D)
+cod %>% plot_correlation_funnel(interactive = T,limits = c(-0.5,0.5))
+```
+```{r, echo=FALSE, eval=FALSE}
+
+ted <- head(cod %>% mutate(corr = abs(correlation)) %>% 
+  arrange(desc(corr)) %>% select(feature) %>% unique(),20)
+
+coe <- cfd %>% correlate(target = classe__E)
+coe %>% plot_correlation_funnel(interactive = T,limits = c(-0.5,0.5))
+
+```
+```{r, echo=FALSE, eval=FALSE}
+tee <- head(coe %>% mutate(corr = abs(correlation)) %>% 
+  arrange(desc(corr)) %>% select(feature) %>% unique(),20)
+
+tee$feature[which(tee$feature %in% cc)]
+
+```
+ 
+### Let us try to plot the pairs...
+
+```{r, fig.align="center",fig.height=15,fig.width=15}
+
+acol <- c("magnet_arm_x", "pitch_forearm" , "magnet_dumbbell_y", 
+           "roll_forearm", "gyros_dumbbell_y") 
+bcol <- c("magnet_dumbbell_y", "magnet_dumbbell_x" , "roll_dumbbell" , 
+           "magnet_belt_y" , "accel_dumbbell_x" )
+ccol <- c("magnet_dumbbell_y", "roll_dumbbell" , "accel_dumbbell_y" , 
+           "magnet_dumbbell_x", "magnet_dumbbell_z")
+dcol <- c("pitch_forearm" , "magnet_arm_y" , "magnet_forearm_x",
+           "accel_dumbbell_y", "accel_forearm_x")
+ecol <- c("magnet_belt_y" , "magnet_belt_z" , "roll_belt", 
+           "gyros_belt_z" , "magnet_dumbbell_y")
+
+fic <- character()
+for(c in c(acol,bcol,ccol,dcol,ecol)){
+  fic <- union(fic, c)
+}
+
+dfa_2 <- dfa %>% select(fic, classe)
+data.frame("arm" = sum(grepl("_arm",fic)), 
+           "forearm" = sum(grepl("_forearm",fic)),
+           "belt" = sum(grepl("_belt",fic)),
+           "dumbbell" = sum(grepl("_dumbbell",fic)))
+
+demy <- function(data, mapping, ...) {
+  ggplot(data = data, mapping = mapping) +
+    geom_density(..., alpha = 0.3)+scale_fill_brewer(palette="Set2") 
+}
+
+pomy <- function(data, mapping, ...) {
+  ggplot(data = data, mapping = mapping) +
+    geom_point(..., alpha = 0.1)+ scale_fill_brewer(palette="Set2") 
+}
+
+ggpairs(dfa_2, columns = 1:5,aes(color = classe),
+        lower = list(continuous = pomy),diag = list(continuous = demy))
+```
+
+```{r,fig.align="center",fig.height=15,fig.width=15}
+ggpairs(dfa_2, columns = 6:10,aes(color = classe),
+        lower = list(continuous = pomy),diag = list(continuous = demy))
+```
+
+```{r,fig.align="center",fig.height=15,fig.width=15}
+ggpairs(dfa_2, columns = 11:17,aes(color = classe),
+        lower = list(continuous = pomy),diag = list(continuous = demy))
+```
+```{r}
+dftrF <- dftr %>% select(fic,classe)
+dfvF <- dfv %>% select(fic,classe)
+
+dftrF[,1:17] <- sapply(dftrF[,1:17],as.numeric)
+dfvF[,1:17] <- sapply(dfvF[,1:17],as.numeric)
+
+lvs <- c("A", "B", "C", "D", "E")
+
+ppo <- preProcess(dftrF[,-18],method = c("center","scale","BoxCox"))
+xt <- predict(ppo,select(dftrF,-classe))
+yt <- factor(dftrF$classe,levels=lvs)
+xv <- predict(ppo,select(dfvF,-classe))
+yv <- factor(dfvF$classe,levels=lvs)
+
+ctrlt <- trainControl(method="cv", number=5)
+
+
+CTm <- train(x = xt,y = yt, 
+                 method = "rpart", trControl = ctrlt)
+
+
+RFm <- train(x = xt,y = yt, 
+                 method = "rf", trControl = ctrlt,verbose=FALSE, metric = "Accuracy")
+
+
+GBMm <- train(x = xt,y = yt, 
+                  method = "gbm",trControl=ctrlt, verbose=FALSE)
+
+
+SVMm <- svm(x = xt,y = yt,
+                kernel = "polynomial", cost = 10)
+
+```
+
+```{r}
+confusionMatrix(predict(CTm,xv),yv)
+```
+
+
+```{r}
+confusionMatrix(predict(RFm,xv),yv)
+```
+
+```{r}
+plot(RFm$finalModel,main="Error Graph")
+```
+
+```{r}
+confusionMatrix(predict(GBMm,xv),yv)
+```
+
+```{r}
+confusionMatrix(predict(SVMm,xv),yv)
+```
+
+```{r}
+newdft <- dft %>% select(fic,problem_id)
+
+xTest <- newdft %>% select(fic)
+  
+finalr <- data.frame("problem_id" = dft$problem_id,
+                     "RF" = predict(RFm,xTest),
+                     "GBM" = predict(GBMm,xTest),
+                     "SVM" = predict(SVMm,xTest))
+
+finalr
+```
+### Thank you for going through my project. Have a great day!!!
